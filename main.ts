@@ -10,8 +10,8 @@ interface Match {
   p2: string;
   s1: number[];
   s2: number[];
-  g1: number | null;
-  g2: number | null;
+  g1: string | null;
+  g2: string | null;
   server: number | null;
   winner: number | null;
 }
