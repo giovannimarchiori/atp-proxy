@@ -1,6 +1,9 @@
 const ATP_URL =
   "https://app.atptour.com/api/v2/gateway/livematches/website?scoringTournamentLevel=tour";
 
+const JINA_URL =
+  "https://r.jina.ai/" + ATP_URL;
+
 interface Match {
   status: string;
   p1: string;
@@ -54,7 +57,6 @@ function transform(data: any): { tournaments: Tournament[] } {
     const type = event.EventType;
 
     // Keep ATP 500, ATP 1000 and Grand Slams.
-    // ATP 250 and all other tournaments are discarded.
     if (
       type !== "500" &&
       type !== "1000" &&
@@ -63,8 +65,6 @@ function transform(data: any): { tournaments: Tournament[] } {
       continue;
     }
 
-    // For normal tournaments use the city.
-    // For Grand Slams use the tournament name.
     const name = isGrandSlam(event)
       ? event.EventTitle
       : event.EventCity;
@@ -73,7 +73,6 @@ function transform(data: any): { tournaments: Tournament[] } {
 
     for (const m of event.LiveMatches ?? []) {
 
-      // Singles only.
       if (m.IsDoubles === true) {
         continue;
       }
@@ -84,7 +83,6 @@ function transform(data: any): { tournaments: Tournament[] } {
       const p1 = p1team.Player ?? {};
       const p2 = p2team.Player ?? {};
 
-      // Completed sets.
       const s1: number[] = [];
       const s2: number[] = [];
 
@@ -100,10 +98,6 @@ function transform(data: any): { tournaments: Tournament[] } {
         }
       }
 
-      // Winner:
-      // 0 = player 1
-      // 1 = player 2
-      // null = no winner yet
       let winner: number | null = null;
 
       if (m.WinningPlayerId != null) {
@@ -127,16 +121,12 @@ function transform(data: any): { tournaments: Tournament[] } {
         g1: p1team.GameScore ?? null,
         g2: p2team.GameScore ?? null,
 
-        // 0 = player 1 serving
-        // 1 = player 2 serving
-        // null = nobody serving
         server: m.ServerTeam ?? null,
 
         winner,
       });
     }
 
-    // Don't return empty tournaments.
     if (matches.length > 0) {
       tournaments.push({
         name,
@@ -154,8 +144,6 @@ export default {
 
     const url = new URL(req.url);
 
-    // Our endpoint will be:
-    // https://<app>.deno.net/atp
     if (url.pathname !== "/atp") {
       return new Response("Not found", {
         status: 404,
@@ -164,36 +152,79 @@ export default {
 
     try {
 
-      const response = await fetch(ATP_URL);
+      // --------------------------------------------------
+      // 1. Fetch ATP through Jina
+      // --------------------------------------------------
 
-      if (!response.ok) {
+      const jinaResponse = await fetch(JINA_URL, {
+        headers: {
+          "Accept": "application/json",
+        },
+      });
 
+      if (!jinaResponse.ok) {
         return new Response(
           JSON.stringify({
-            error: "ATP API error",
-            status: response.status,
+            error: "Jina error",
+            status: jinaResponse.status,
           }),
           {
             status: 502,
             headers: {
-              "content-type": "application/json; charset=utf-8",
+              "content-type":
+                "application/json; charset=utf-8",
             },
           },
         );
       }
 
-      const raw = await response.json();
+      // --------------------------------------------------
+      // 2. Parse Jina wrapper
+      // --------------------------------------------------
 
-      const result = transform(raw);
+      const jinaData = await jinaResponse.json();
+
+      const content = jinaData?.data?.content;
+
+      if (typeof content !== "string") {
+        return new Response(
+          JSON.stringify({
+            error: "Jina response has no content",
+          }),
+          {
+            status: 502,
+            headers: {
+              "content-type":
+                "application/json; charset=utf-8",
+            },
+          },
+        );
+      }
+
+      // --------------------------------------------------
+      // 3. Parse the ATP JSON contained in Jina content
+      // --------------------------------------------------
+
+      const atpData = JSON.parse(content);
+
+      // --------------------------------------------------
+      // 4. Transform into our small Garmin JSON
+      // --------------------------------------------------
+
+      const result = transform(atpData);
+
+      // --------------------------------------------------
+      // 5. Return small clean JSON to Garmin
+      // --------------------------------------------------
 
       return new Response(
         JSON.stringify(result),
         {
           status: 200,
           headers: {
-            "content-type": "application/json; charset=utf-8",
+            "content-type":
+              "application/json; charset=utf-8",
 
-            // Don't cache the ATP scores.
             "cache-control": "no-store",
           },
         },
@@ -208,7 +239,8 @@ export default {
         {
           status: 500,
           headers: {
-            "content-type": "application/json; charset=utf-8",
+            "content-type":
+              "application/json; charset=utf-8",
           },
         },
       );
