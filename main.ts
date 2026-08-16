@@ -156,8 +156,24 @@ export default {
       // 1. Fetch ATP through Jina
       // --------------------------------------------------
 
+      const jinaApiKey = Deno.env.get("JINA_API_KEY");
+
+      if (!jinaApiKey) {
+        return new Response(
+          JSON.stringify({
+            error: "JINA_API_KEY is not configured",
+          }),
+          {
+            status: 500,
+            headers: {
+              "content-type": "application/json; charset=utf-8",
+            },
+          },
+        );
+}
       const jinaResponse = await fetch(JINA_URL, {
         headers: {
+          "Authorization": `Bearer ${jinaApiKey}`,
           "Accept": "application/json",
         },
       });
