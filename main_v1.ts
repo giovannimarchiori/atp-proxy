@@ -14,6 +14,9 @@ interface Match {
   g2: string;
   server: number | null;
   winner: number | null;
+
+  // Internal only — removed before JSON output
+  _finishedAt?: number;
 }
 
 interface Tournament {
@@ -124,19 +127,16 @@ function transformMatch(m: any): Match | null {
 
   return {
     status: isLive ? "P" : "F",
-
     p1: p1?.n ?? "",
     p2: p2?.n ?? "",
-
     s1,
     s2,
     sw,
-
     g1,
     g2,
-
     server,
     winner,
+    _finishedAt: isLive ? undefined : Number(m.finishedAt),
   };
 }
 
@@ -295,25 +295,32 @@ function transform(data: any): {
   // --------------------------------------------------
 
   for (const tournament of tournaments.values()) {
+    tournament.matches.sort((a, b) => {
 
-    tournament.matches.sort(
-      (a, b) => {
+      // Live first
+      if (a.status === "P" && b.status !== "P") {
+        return -1;
+      }
 
-        if (a.status === "P" &&
-            b.status !== "P") {
-          return -1;
-        }
+      if (a.status !== "P" && b.status === "P") {
+        return 1;
+      }
 
-        if (a.status !== "P" &&
-            b.status === "P") {
-          return 1;
-        }
+      // Among finished matches:
+      // newest finished first
+      if (a.status === "F" && b.status === "F") {
+        return (b._finishedAt ?? 0) - (a._finishedAt ?? 0);
+      }
 
-        return 0;
-      },
-    );
+      return 0;
+    });
   }
 
+  for (const tournament of tournaments.values()) {
+    for (const match of tournament.matches) {
+      delete match._finishedAt;
+    }
+  }
 
   return {
     tournaments:
