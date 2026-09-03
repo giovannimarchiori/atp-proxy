@@ -353,11 +353,6 @@ export default {
 
       const response =
         await fetch(TNNL_URL);
-      console.log("status:", response.status);
-      console.log("content-type:", response.headers.get("content-type"));
-      const text = await response.text();
-      console.log("length:", text.length);
-      console.log(text.substring(0, 200));
 
       if (!response.ok) {
 
