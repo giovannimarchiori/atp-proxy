@@ -206,6 +206,17 @@ function transform(data: any): {
       continue;
     }
 
+    // Singles only
+    const players = m?.p ?? [];
+
+    if (
+      players.length < 2 ||
+      players[0]?.n?.includes(" / ") ||
+      players[1]?.n?.includes(" / ")
+    ) {
+      continue;
+    }
+
     const isLive =
       (m?.fs ?? []).includes("l");
 
